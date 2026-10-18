@@ -50,6 +50,12 @@ npm run compile:target
 3. Build Command 使用 `npm run build`，Output Directory 使用 `dist`。
 4. 部署后使用 Vercel 提供的 HTTPS 地址在 iPhone Safari 打开。
 
+## GitHub Pages 部署
+
+项目使用相对资源路径，也可以发布到仓库的 `gh-pages` 分支。当前仓库对应地址为：
+
+`https://13479-cmyk.github.io/-AR/`
+
 ## iPhone 现场验证
 
 - 点击“启动 AR”后允许摄像头权限，并确认出现后置摄像头画面。
