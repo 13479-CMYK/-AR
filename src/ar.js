@@ -40,6 +40,7 @@ export function createARSession({ container, ui }) {
 
     const { renderer, scene, camera } = mindar;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x000000, 0);
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x224433, 2.2));
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);

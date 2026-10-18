@@ -19,8 +19,21 @@ button { font: inherit; }
     #07120d;
 }
 
-#ar-container { position: absolute; inset: 0; }
-#ar-container video, #ar-container canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
+#ar-container {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+}
+#ar-container video {
+  z-index: 0 !important;
+  object-fit: cover;
+}
+#ar-container canvas {
+  z-index: 1 !important;
+  background: transparent !important;
+}
 
 .panel {
   position: absolute;
