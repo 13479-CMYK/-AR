@@ -5,7 +5,7 @@ const BASE_URL = import.meta.env.BASE_URL;
 const TARGET_URL = `${BASE_URL}targets/school-logo.mind`;
 const IDLE_FPS = 8;
 const JUMP_FPS = 10;
-const CHARACTER_WIDTH = 0.3;
+const CHARACTER_WIDTH = 1;
 const CHARACTER_HEIGHT = CHARACTER_WIDTH * (630 / 740);
 
 const idleUrls = Array.from({ length: 8 }, (_, index) =>
@@ -165,7 +165,7 @@ export function createARSession({ container, ui }) {
 
     buttonTexture = makeButtonTexture();
     jumpButton = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.13, 0.041),
+      new THREE.PlaneGeometry(0.22, 0.069),
       new THREE.MeshBasicMaterial({
         map: buttonTexture,
         transparent: true,
@@ -173,7 +173,7 @@ export function createARSession({ container, ui }) {
         side: THREE.DoubleSide,
       }),
     );
-    jumpButton.position.set(0, -0.145, 0.025);
+    jumpButton.position.set(0, -0.47, 0.025);
     jumpButton.renderOrder = 3;
     jumpButton.visible = false;
     anchor.group.add(jumpButton);
