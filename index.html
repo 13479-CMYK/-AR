@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#07120d" />
+    <title>学院标志 AR 测试</title>
+    <script type="module" crossorigin src="./assets/index-BoeY2d-A.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DM6Insxo.css">
+  </head>
+  <body>
+    <main id="app">
+      <div id="ar-container" aria-label="AR 摄像头画面"></div>
+      <section class="panel" aria-live="polite">
+        <p class="eyebrow">IMAGE TRACKING PROTOTYPE</p>
+        <h1>学院标志 AR 测试</h1>
+        <p class="instruction">点击启动后，将后置摄像头对准学院入口的三个发光标志。识别成功后，点击角色下方的 JUMP。</p>
+        <p id="status" class="status" data-state="idle"><span class="status-dot"></span><span id="status-text">准备中</span></p>
+        <p id="lost-hint" class="lost-hint" hidden>目标丢失，请重新对准学院标志</p>
+        <div class="actions">
+          <button id="start-button" type="button">启动 AR</button>
+          <button id="stop-button" class="secondary" type="button" hidden>停止 AR</button>
+        </div>
+      </section>
+      <details class="debug">
+        <summary>调试信息</summary>
+        <dl>
+          <div><dt>初始化</dt><dd id="debug-init">未启动</dd></div>
+          <div><dt>识别目标</dt><dd id="debug-target">否</dd></div>
+          <div><dt>角色可见</dt><dd id="debug-model">否</dd></div>
+          <div><dt>错误</dt><dd id="debug-error">无</dd></div>
+        </dl>
+      </details>
+    </main>
+  </body>
+</html>
