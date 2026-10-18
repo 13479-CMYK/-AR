@@ -1,0 +1,23 @@
+{
+  "name": "webar-logo-test",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "compile:target": "node scripts/compile-target.mjs"
+  },
+  "dependencies": {
+    "mind-ar": "1.2.5",
+    "three": "0.160.0"
+  },
+  "devDependencies": {
+    "canvas": "3.2.0",
+    "vite": "8.3.4"
+  },
+  "overrides": {
+    "canvas": "3.2.0"
+  }
+}
