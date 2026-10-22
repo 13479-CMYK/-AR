@@ -61,6 +61,9 @@ const ui = {
     elements.debugModel.textContent = '是';
     elements.lostHint.hidden = true;
   },
+  blowDetected() {
+    setStatus('检测到吹气，精灵开始旋转', 'success');
+  },
   lost() {
     setStatus('目标丢失', 'lost');
     elements.debugTarget.textContent = '否';

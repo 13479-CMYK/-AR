@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#07120d" />
+    <title>三只精灵 · 本地预览</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; }
+      body { overflow: hidden; color: #eef8f1; background: #07120d; font-family: system-ui, sans-serif; }
+      #preview { position: fixed; inset: 0; }
+      #preview canvas { display: block; width: 100%; height: 100%; }
+      .caption { position: absolute; top: 22px; left: 22px; padding: 14px 18px; border: 1px solid #ffffff25; border-radius: 14px; background: #07120dcc; backdrop-filter: blur(12px); }
+      .caption strong { display: block; margin-bottom: 4px; font-size: 15px; }
+      .caption span { color: #b8cabf; font-size: 12px; }
+      .caption #gesture-status { display: block; min-height: 1.2em; margin-top: 5px; color: #67f3a0; }
+      .caption button { margin-top: 8px; border: 1px solid #67f3a066; border-radius: 999px; padding: 6px 10px; color: #dfffea; background: #163525; font: inherit; font-size: 12px; cursor: pointer; }
+      .caption button:disabled { opacity: .65; cursor: default; }
+      @media (max-width: 600px) { .caption { top: 12px; left: 12px; right: 12px; } }
+    </style>
+  </head>
+  <body>
+    <main id="preview" aria-label="三只精灵本地模型预览"></main>
+    <div class="caption"><strong>三只精灵 · 交互预览</strong><span>按住鼠标在角色头部上三分之一左右往返（左-右-左）＝摸头；慢速横划身体＝按距离转身，松手后 1.5 秒无动作则回正；身体上下划动＝弹动。Shift＋拖动可旋转视角。</span><span id="gesture-status" aria-live="polite">按住角色头部并左右往返，可模拟摸头手势。</span><button id="blow-test-button" type="button">开启吹气测试（需要麦克风）</button></div>
+    <script type="module" src="/src/preview.js"></script>
+  </body>
+</html>
