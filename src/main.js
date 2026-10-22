@@ -11,7 +11,6 @@ const elements = {
   debugInit: document.querySelector('#debug-init'),
   debugTarget: document.querySelector('#debug-target'),
   debugModel: document.querySelector('#debug-model'),
-  debugHand: document.querySelector('#debug-hand'),
   debugError: document.querySelector('#debug-error'),
 };
 
@@ -59,7 +58,6 @@ const ui = {
     elements.debugInit.textContent = '已启动';
     elements.debugTarget.textContent = '否';
     elements.debugModel.textContent = '否';
-    elements.debugHand.textContent = '初始化中';
   },
   found() {
     setStatus('识别成功', 'success');
@@ -69,9 +67,6 @@ const ui = {
   },
   blowDetected() {
     setStatus('检测到吹气，精灵开始旋转', 'success');
-  },
-  handTracking(ready, error) {
-    elements.debugHand.textContent = ready ? '已就绪' : `不可用：${error?.message || '初始化失败'}`;
   },
   lost() {
     setStatus('目标丢失', 'lost');

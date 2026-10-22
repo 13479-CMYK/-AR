@@ -1,17 +1,11 @@
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 import { MindARThree } from 'mind-ar/dist/mindar-image-three.prod.js';
 import { startBlowDetector } from './blow.js';
 
 const BASE_URL = import.meta.env.BASE_URL;
 const TARGET_URL = `${BASE_URL}targets/school-logo.mind`;
-const HAND_MODEL_URL = `${BASE_URL}mediapipe/hand_landmarker.task`;
-// Keep the vision runtime on the same origin as the app. The hosted CDN is
-// frequently unavailable on mobile/campus networks, which silently disables
-// all hand interactions while image tracking still appears to work.
-const MEDIAPIPE_WASM_URL = `${BASE_URL}mediapipe/wasm`;
 const CHARACTERS = [
   {
     key: 'heart',
@@ -35,10 +29,7 @@ const CHARACTERS = [
 const CHARACTER_SPAN = 0.88;
 const FLOAT_AMPLITUDE = 0.012;
 const BREATH_AMPLITUDE = 0.025;
-// Sample often enough to retain short left-right-left strokes on mobile.
-const HAND_INTERVAL_MS = 66;
 const ACTION_COOLDOWN_MS = 750;
-const HAND_MISS_RESET_MS = 280;
 const TURN_SPEED_MAX = 0.00025;
 const TURN_RADIANS_PER_SCREEN_WIDTH = Math.PI * 4;
 const TURN_RETURN_DELAY_MS = 1500;
@@ -84,25 +75,6 @@ function prepareCharacter(model, name, targetWidth) {
   return wrapper;
 }
 
-function pointInViewport(landmark, video, bounds) {
-  const frameWidth = video.videoWidth;
-  const frameHeight = video.videoHeight;
-  if (!frameWidth || !frameHeight) return null;
-
-  const frameAspect = frameWidth / frameHeight;
-  const viewportAspect = bounds.width / bounds.height;
-  let x = landmark.x;
-  let y = landmark.y;
-  if (frameAspect > viewportAspect) {
-    const visibleWidth = viewportAspect / frameAspect;
-    x = (x - (1 - visibleWidth) / 2) / visibleWidth;
-  } else {
-    const visibleHeight = frameAspect / viewportAspect;
-    y = (y - (1 - visibleHeight) / 2) / visibleHeight;
-  }
-  return { x, y };
-}
-
 function projectPoint(point, camera) {
   const projected = point.clone().project(camera);
   return { x: (projected.x + 1) / 2, y: (1 - projected.y) / 2 };
@@ -115,19 +87,13 @@ function distance2D(a, b) {
 export function createARSession({ container, ui }) {
   let mindar = null;
   let characters = [];
-  let handLandmarker = null;
-  let handLandmarkerTask = null;
   let blowDetector = null;
   let blowDetectorTask = null;
   let actionCache = new Map();
   let targetVisible = false;
   let stopped = false;
-  let lastHandFrameAt = 0;
   let lastRenderAt = 0;
-  let lastHandSeenAt = 0;
-  let handTrail = [];
-  let previousHandPoint = null;
-  let patGesture = null;
+  let removeScreenGestures = null;
 
   function makeCharacterRecord(baseModel, data, index, spacing, targetWidth, row) {
     const pose = new THREE.Group();
@@ -136,7 +102,6 @@ export function createARSession({ container, ui }) {
     pose.userData.floatPhase = index * 1.55;
     pose.userData.baseY = 0;
     pose.userData.lastActionAt = -Infinity;
-    pose.userData.touchStartedAt = null;
     pose.userData.turnAngle = 0;
     pose.userData.lastTurnGestureAt = -Infinity;
     pose.userData.blowSpinVelocity = 0;
@@ -204,6 +169,7 @@ export function createARSession({ container, ui }) {
   }
 
   function getScreenTargets(camera) {
+    camera.updateMatrixWorld(true);
     return characters.map((record) => {
       const height = record.pose.userData.modelHeight;
       const width = record.base.userData.modelWidth;
@@ -259,117 +225,131 @@ export function createARSession({ container, ui }) {
     return best;
   }
 
-  function selectNearest(point, screenTargets, key, maxDistance) {
-    let best = null;
-    let bestDistance = maxDistance;
-    for (const target of screenTargets) {
-      const distance = distance2D(point, target[key]);
-      if (distance < bestDistance) {
-        best = target;
-        bestDistance = distance;
-      }
-    }
-    return best;
-  }
+  function bindScreenGestures(renderer, camera) {
+    const canvas = renderer.domElement;
+    canvas.style.touchAction = 'none';
+    let dragStart = null;
+    let previousPoint = null;
+    let patGesture = null;
+    let activePointerId = null;
 
-  function processHandLandmarks(result, now, video, bounds, camera) {
-    const landmarks = result.landmarks?.[0];
-    if (!landmarks?.[8]) {
-      if (now - lastHandSeenAt > HAND_MISS_RESET_MS) {
-        handTrail = [];
-        previousHandPoint = null;
-        patGesture = null;
-        for (const record of characters) record.pose.userData.touchStartedAt = null;
-      }
-      return;
-    }
+    const pointFromEvent = (event) => {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return null;
+      return {
+        x: THREE.MathUtils.clamp((event.clientX - rect.left) / rect.width, 0, 1),
+        y: THREE.MathUtils.clamp((event.clientY - rect.top) / rect.height, 0, 1),
+      };
+    };
+    const reset = () => {
+      dragStart = null;
+      previousPoint = null;
+      patGesture = null;
+      activePointerId = null;
+    };
 
-    lastHandSeenAt = now;
-    const point = pointInViewport(landmarks[8], video, bounds);
-    if (!point || point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1) return;
-    const screenTargets = getScreenTargets(camera);
+    const onPointerDown = (event) => {
+      if (!targetVisible || stopped || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      const point = pointFromEvent(event);
+      if (!point) return;
+      const now = performance.now();
+      dragStart = { ...point, at: now };
+      previousPoint = { ...point, at: now };
+      activePointerId = event.pointerId;
+      const screenTargets = getScreenTargets(camera);
+      const headRecord = hitCharacter(point, screenTargets, true)?.record || null;
+      patGesture = headRecord ? { record: headRecord, strokeStartX: point.x, direction: 0, strokeCount: 0 } : null;
+      event.preventDefault();
+      try { canvas.setPointerCapture(event.pointerId); } catch { /* iOS may already own capture. */ }
+    };
 
-    handTrail.push({ ...point, time: now });
-    handTrail = handTrail.filter((sample) => now - sample.time <= 420);
-    if (handTrail.length < 2) {
-      previousHandPoint = { ...point, time: now };
-      return;
-    }
+    const onPointerMove = (event) => {
+      if (!dragStart || !previousPoint || event.pointerId !== activePointerId) return;
+      const point = pointFromEvent(event);
+      if (!point) return;
+      event.preventDefault();
+      const now = performance.now();
+      const current = { ...point, at: now };
+      const dx = current.x - previousPoint.x;
+      const dy = current.y - previousPoint.y;
+      const midpoint = { x: (current.x + previousPoint.x) / 2, y: (current.y + previousPoint.y) / 2 };
+      const elapsed = Math.max(current.at - previousPoint.at, 1);
+      const speed = Math.hypot(dx, dy) / elapsed;
+      const screenTargets = getScreenTargets(camera);
+      const headTarget = hitCharacter(current, screenTargets, true)?.record || null;
 
-    const start = handTrail[0];
-    const dx = point.x - start.x;
-    const dy = point.y - start.y;
-    const duration = now - start.time;
-    const distance = Math.hypot(dx, dy);
-    const headTarget = hitCharacter(point, screenTargets, true);
-    if (headTarget) {
-      if (!patGesture || patGesture.record !== headTarget.record) {
-        patGesture = { record: headTarget.record, strokeStartX: point.x, direction: 0, strokeCount: 0 };
-      } else {
-        const targetWidth = Math.abs(headTarget.headRight.x - headTarget.headLeft.x);
-        const strokeThreshold = Math.max(0.018, targetWidth * 0.12);
-        const strokeDx = point.x - patGesture.strokeStartX;
-        if (Math.abs(strokeDx) >= strokeThreshold) {
+      if (patGesture && headTarget === patGesture.record) {
+        const headTargetBounds = screenTargets.find((target) => target.record === patGesture.record);
+        const headWidth = Math.abs(headTargetBounds.headRight.x - headTargetBounds.headLeft.x);
+        const threshold = Math.max(0.018, headWidth * 0.12);
+        const strokeDx = current.x - patGesture.strokeStartX;
+        if (Math.abs(strokeDx) >= threshold) {
           const direction = Math.sign(strokeDx);
           if (patGesture.direction && direction !== patGesture.direction) patGesture.strokeCount += 1;
           else if (!patGesture.direction) patGesture.strokeCount = 1;
           patGesture.direction = direction;
-          patGesture.strokeStartX = point.x;
+          patGesture.strokeStartX = current.x;
           if (patGesture.strokeCount >= 3) {
             void playCharacterAction(patGesture.record, 'pat', now);
-            patGesture = { record: patGesture.record, strokeStartX: point.x, direction: 0, strokeCount: 0 };
+            patGesture = null;
           }
         }
+      } else if (patGesture) {
+        patGesture = null;
       }
-    } else {
-      patGesture = null;
-    }
 
-    if (duration >= 65 && duration <= 420 && distance > 0.06) {
-      const midpoint = { x: (point.x + start.x) / 2, y: (point.y + start.y) / 2 };
-      if (Math.abs(dy) > Math.abs(dx) * 1.25) {
-        const target = hitCharacter(midpoint, screenTargets);
-        if (target) {
-          void playCharacterAction(target.record, 'pull', now);
-          handTrail = [{ ...point, time: now }];
-        }
-      }
-    }
-
-    if (previousHandPoint) {
-      const stepX = point.x - previousHandPoint.x;
-      const stepY = point.y - previousHandPoint.y;
-      const stepTime = Math.max(now - previousHandPoint.time, 1);
-      const stepDistance = Math.hypot(stepX, stepY);
-      const stepMidpoint = { x: (point.x + previousHandPoint.x) / 2, y: (point.y + previousHandPoint.y) / 2 };
-      const stepSpeed = stepDistance / stepTime;
-      const trailSpeed = distance / Math.max(duration, 1);
-      if (!headTarget && Math.abs(stepX) > Math.abs(stepY) * 1.15 && stepDistance > 0.004 && stepSpeed <= TURN_SPEED_MAX && trailSpeed <= TURN_SPEED_MAX) {
-        const target = hitCharacter(stepMidpoint, screenTargets);
-        if (target) {
-          const pose = target.record.pose;
+      // Slow horizontal drag on a character's body rotates by drag distance.
+      if (!headTarget && Math.abs(dx) > Math.abs(dy) * 1.15 && Math.abs(dx) > 0.002 && speed <= TURN_SPEED_MAX) {
+        const bodyTarget = hitCharacter(midpoint, screenTargets);
+        if (bodyTarget) {
+          const pose = bodyTarget.record.pose;
           pose.userData.turnAngle = THREE.MathUtils.clamp(
-            pose.userData.turnAngle + stepX * TURN_RADIANS_PER_SCREEN_WIDTH,
+            pose.userData.turnAngle + dx * TURN_RADIANS_PER_SCREEN_WIDTH,
             -Math.PI * 1.5,
             Math.PI * 1.5,
           );
           pose.userData.lastTurnGestureAt = now;
         }
       }
-    }
-    previousHandPoint = { ...point, time: now };
-  }
+      previousPoint = current;
+    };
 
-  async function startHandTracking() {
-    const fileset = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL);
-    return HandLandmarker.createFromOptions(fileset, {
-      baseOptions: { modelAssetPath: HAND_MODEL_URL },
-      runningMode: 'VIDEO',
-      numHands: 1,
-      minHandDetectionConfidence: 0.55,
-      minHandPresenceConfidence: 0.55,
-      minTrackingConfidence: 0.55,
-    });
+    const onPointerUp = (event) => {
+      if (!dragStart || event.pointerId !== activePointerId) return;
+      event.preventDefault();
+      const endPoint = pointFromEvent(event);
+      if (endPoint) {
+        const dx = endPoint.x - dragStart.x;
+        const dy = endPoint.y - dragStart.y;
+        const midpoint = { x: (endPoint.x + dragStart.x) / 2, y: (endPoint.y + dragStart.y) / 2 };
+        const duration = performance.now() - dragStart.at;
+        const distance = Math.hypot(dx, dy);
+        if (duration < 1400 && distance > 0.08 && Math.abs(dy) > Math.abs(dx) * 1.25) {
+          const bodyTarget = hitCharacter(midpoint, getScreenTargets(camera));
+          if (bodyTarget) void playCharacterAction(bodyTarget.record, 'pull', performance.now());
+        }
+      }
+      reset();
+    };
+
+    const onPointerCancel = (event) => {
+      if (event.pointerId === activePointerId) reset();
+    };
+
+    canvas.addEventListener('pointerdown', onPointerDown, { passive: false });
+    canvas.addEventListener('pointermove', onPointerMove, { passive: false });
+    canvas.addEventListener('pointerup', onPointerUp, { passive: false });
+    canvas.addEventListener('pointercancel', onPointerCancel);
+    canvas.addEventListener('lostpointercapture', onPointerCancel);
+    return () => {
+      reset();
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerup', onPointerUp);
+      canvas.removeEventListener('pointercancel', onPointerCancel);
+      canvas.removeEventListener('lostpointercapture', onPointerCancel);
+      canvas.style.touchAction = '';
+    };
   }
 
   async function start() {
@@ -397,20 +377,7 @@ export function createARSession({ container, ui }) {
       console.info('[WebAR] Microphone blow interaction is unavailable; AR remains active.', error);
     });
 
-    const wasmFiles = [
-      'vision_wasm_internal.js',
-      'vision_wasm_internal.wasm',
-      'vision_wasm_module_internal.js',
-      'vision_wasm_module_internal.wasm',
-      'vision_wasm_nosimd_internal.js',
-      'vision_wasm_nosimd_internal.wasm',
-    ];
-    const assetUrls = [
-      TARGET_URL,
-      HAND_MODEL_URL,
-      ...wasmFiles.map((file) => `${MEDIAPIPE_WASM_URL}/${file}`),
-      ...CHARACTERS.flatMap((character) => [character.model, character.pat, character.pull]),
-    ];
+    const assetUrls = [TARGET_URL, ...CHARACTERS.flatMap((character) => [character.model, character.pat, character.pull])];
     await Promise.all(assetUrls.map((url, index) => assertAssetAvailable(url, `AR 资源 ${index + 1}`)));
 
     const fbxLoader = new FBXLoader();
@@ -462,27 +429,11 @@ export function createARSession({ container, ui }) {
       if (stopped) return;
       targetVisible = false;
       row.visible = false;
-      handTrail = [];
-      previousHandPoint = null;
-      patGesture = null;
       ui.lost();
     };
 
     await mindar.start();
-    handLandmarkerTask = startHandTracking()
-      .then((task) => {
-        if (stopped) task.close();
-        else {
-          handLandmarker = task;
-          ui.handTracking?.(true);
-        }
-        return task;
-      })
-      .catch((error) => {
-        console.warn('[WebAR] Hand tracking is unavailable; image tracking remains active.', error);
-        ui.handTracking?.(false, error);
-        return null;
-      });
+    removeScreenGestures = bindScreenGestures(renderer, camera);
 
     renderer.setAnimationLoop((now) => {
       const time = now / 1000;
@@ -513,16 +464,6 @@ export function createARSession({ container, ui }) {
         if (record.activeVariant) record.activeVariant.mixer.update(deltaSeconds);
       }
 
-      if (targetVisible && handLandmarker && mindar.video?.readyState >= 2 && now - lastHandFrameAt >= HAND_INTERVAL_MS) {
-        lastHandFrameAt = now;
-        try {
-          const bounds = renderer.domElement.getBoundingClientRect();
-          const result = handLandmarker.detectForVideo(mindar.video, now);
-          processHandLandmarks(result, now, mindar.video, bounds, camera);
-        } catch (error) {
-          console.warn('[WebAR] Hand gesture inference failed.', error);
-        }
-      }
       renderer.render(scene, camera);
     });
   }
@@ -531,7 +472,8 @@ export function createARSession({ container, ui }) {
     if (stopped) return;
     stopped = true;
     targetVisible = false;
-    if (handLandmarker) handLandmarker.close();
+    removeScreenGestures?.();
+    removeScreenGestures = null;
     if (blowDetector) await blowDetector.stop();
     blowDetector = null;
     if (mindar) {
@@ -559,7 +501,6 @@ export function createARSession({ container, ui }) {
     container.replaceChildren();
     characters = [];
     actionCache.clear();
-    handLandmarker = null;
     mindar = null;
   }
 
