@@ -26,12 +26,16 @@ const CHARACTERS = [
     pull: `${BASE_URL}characters/animations/leaf_pull.glb`,
   },
 ];
-const CHARACTER_SPAN = 0.88;
+// Characters intentionally extend slightly beyond the logo's width for a more
+// readable foreground presence while remaining anchored to the target.
+const CHARACTER_SPAN = 0.99;
 const FLOAT_AMPLITUDE = 0.012;
 const BREATH_AMPLITUDE = 0.025;
 const ACTION_COOLDOWN_MS = 750;
-const TURN_SPEED_MAX = 0.00025;
-const TURN_RADIANS_PER_SCREEN_WIDTH = Math.PI * 4;
+// Accept deliberate finger swipes at natural touch speed; rotation amount is
+// based on drag distance, not on an unrealistically slow pointer velocity.
+const TURN_SPEED_MAX = 0.0045;
+const TURN_RADIANS_PER_SCREEN_WIDTH = Math.PI * 5.2;
 const TURN_RETURN_DELAY_MS = 1500;
 
 async function assertAssetAvailable(url, label) {
@@ -372,9 +376,13 @@ export function createARSession({ container, ui }) {
       ui.blowDetected?.();
     }).then((detector) => {
       if (stopped) void detector.stop();
-      else blowDetector = detector;
+      else {
+        blowDetector = detector;
+        ui.microphoneReady?.();
+      }
     }).catch((error) => {
       console.info('[WebAR] Microphone blow interaction is unavailable; AR remains active.', error);
+      ui.microphoneUnavailable?.(error);
     });
 
     const assetUrls = [TARGET_URL, ...CHARACTERS.flatMap((character) => [character.model, character.pat, character.pull])];

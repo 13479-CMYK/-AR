@@ -68,6 +68,17 @@ const ui = {
   blowDetected() {
     setStatus('检测到吹气，精灵开始旋转', 'success');
   },
+  microphoneReady() {
+    // Keep the minimal UI; expose microphone state only in the optional debug panel.
+    elements.debugInit.textContent = '已启动（麦克风就绪）';
+  },
+  microphoneUnavailable(error) {
+    const reason = error?.name === 'NotAllowedError'
+      ? '麦克风权限被拒绝，请在 Safari 网站设置中允许麦克风后重试。'
+      : `麦克风不可用：${error?.message || error}`;
+    elements.debugError.textContent = reason;
+    console.warn('[WebAR] Microphone unavailable:', error);
+  },
   lost() {
     setStatus('目标丢失', 'lost');
     elements.debugTarget.textContent = '否';

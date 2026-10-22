@@ -17,14 +17,17 @@ export async function startBlowDetector(onBlow) {
   }
   const source = context.createMediaStreamSource(stream);
   const analyser = context.createAnalyser();
-  analyser.fftSize = 1024;
+  analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0;
   source.connect(analyser);
   const samples = new Float32Array(analyser.fftSize);
-  let ambient = 0.012;
+  let ambient = 0;
+  let calibrationSamples = 0;
+  let calibrated = false;
   let loudSince = 0;
   let quietSince = 0;
   let lastBlowAt = -Infinity;
+  let peakRms = 0;
   let stopped = false;
   let timer = 0;
 
@@ -34,30 +37,50 @@ export async function startBlowDetector(onBlow) {
     let sum = 0;
     for (const sample of samples) sum += sample * sample;
     const rms = Math.sqrt(sum / samples.length);
-    const threshold = Math.max(0.09, ambient * 4.5);
     const now = performance.now();
 
-    if (rms >= threshold) {
-      if (!loudSince) loudSince = now;
+    // Learn the room/device's idle noise floor first. A fixed RMS cutoff is
+    // far too high for quiet microphones and too low in noisy environments.
+    if (!calibrated) {
+      ambient = calibrationSamples === 0 ? rms : ambient * 0.92 + rms * 0.08;
+      calibrationSamples += 1;
+      if (calibrationSamples >= 16) calibrated = true;
+      timer = window.setTimeout(inspect, 35);
+      return;
+    }
+
+    const relativeRise = rms - ambient;
+    const threshold = Math.max(0.012, ambient * 1.75);
+
+    if (relativeRise >= threshold) {
+      if (!loudSince) {
+        loudSince = now;
+        peakRms = rms;
+      }
+      peakRms = Math.max(peakRms, rms);
       quietSince = 0;
-    } else if (loudSince && rms < threshold * 0.65) {
+    } else if (loudSince && relativeRise < threshold * 0.55) {
       if (!quietSince) quietSince = now;
-      if (now - quietSince >= 120) {
+      if (now - quietSince >= 180) {
         const duration = quietSince - loudSince;
-        if (duration >= 150 && now - lastBlowAt >= 450) {
+        // Reject tiny clicks, but accept a short intentional puff.
+        if (duration >= 220 && peakRms - ambient >= threshold * 1.35 && now - lastBlowAt >= 700) {
           lastBlowAt = now;
           onBlow?.(duration);
         }
         loudSince = 0;
         quietSince = 0;
+        peakRms = 0;
       }
     } else {
       quietSince = 0;
     }
     if (!loudSince) {
-      ambient = ambient * 0.96 + rms * 0.04;
+      // Slow adaptation prevents sustained blowing from being absorbed as
+      // ambient noise while still tracking gradual device/room noise changes.
+      ambient = ambient * 0.995 + rms * 0.005;
     }
-    timer = window.setTimeout(inspect, 40);
+    timer = window.setTimeout(inspect, 35);
   };
   inspect();
 
