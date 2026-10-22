@@ -5,16 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#07120d" />
     <title>学院标志 AR 测试</title>
-    <script type="module" crossorigin src="./assets/index-BBet8EQ9.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DM6Insxo.css">
+    <script type="module" crossorigin src="./assets/index-YThOTIhh.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DymSj9lZ.css">
   </head>
   <body>
     <main id="app">
       <div id="ar-container" aria-label="AR 摄像头画面"></div>
       <section class="panel" aria-live="polite">
-        <p class="eyebrow">IMAGE TRACKING PROTOTYPE</p>
-        <h1>学院标志 AR 测试</h1>
-        <p class="instruction">对准标志后，三只精灵会在前方出现。按住角色头部上三分之一左右往返（左-右-左）可摸头；慢速横滑身体可转身；上下滑动身体可弹动；允许麦克风后，对着手机吹气可让精灵旋转。</p>
         <p id="status" class="status" data-state="idle"><span class="status-dot"></span><span id="status-text">准备中</span></p>
         <p id="lost-hint" class="lost-hint" hidden>目标丢失，请重新对准学院标志</p>
         <div class="actions">
@@ -22,12 +19,13 @@
           <button id="stop-button" class="secondary" type="button" hidden>停止 AR</button>
         </div>
       </section>
-      <details class="debug">
+      <details class="debug" hidden>
         <summary>调试信息</summary>
         <dl>
           <div><dt>初始化</dt><dd id="debug-init">未启动</dd></div>
           <div><dt>识别目标</dt><dd id="debug-target">否</dd></div>
           <div><dt>角色可见</dt><dd id="debug-model">否</dd></div>
+          <div><dt>手势识别</dt><dd id="debug-hand">未启动</dd></div>
           <div><dt>错误</dt><dd id="debug-error">无</dd></div>
         </dl>
       </details>
