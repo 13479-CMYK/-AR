@@ -8,7 +8,10 @@ import { startBlowDetector } from './blow.js';
 const BASE_URL = import.meta.env.BASE_URL;
 const TARGET_URL = `${BASE_URL}targets/school-logo.mind`;
 const HAND_MODEL_URL = `${BASE_URL}mediapipe/hand_landmarker.task`;
-const MEDIAPIPE_WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm';
+// Keep the vision runtime on the same origin as the app. The hosted CDN is
+// frequently unavailable on mobile/campus networks, which silently disables
+// all hand interactions while image tracking still appears to work.
+const MEDIAPIPE_WASM_URL = `${BASE_URL}mediapipe/wasm`;
 const CHARACTERS = [
   {
     key: 'heart',
@@ -32,7 +35,8 @@ const CHARACTERS = [
 const CHARACTER_SPAN = 0.88;
 const FLOAT_AMPLITUDE = 0.012;
 const BREATH_AMPLITUDE = 0.025;
-const HAND_INTERVAL_MS = 120;
+// Sample often enough to retain short left-right-left strokes on mobile.
+const HAND_INTERVAL_MS = 66;
 const ACTION_COOLDOWN_MS = 750;
 const HAND_MISS_RESET_MS = 280;
 const TURN_SPEED_MAX = 0.00025;
@@ -393,7 +397,20 @@ export function createARSession({ container, ui }) {
       console.info('[WebAR] Microphone blow interaction is unavailable; AR remains active.', error);
     });
 
-    const assetUrls = [TARGET_URL, HAND_MODEL_URL, ...CHARACTERS.flatMap((character) => [character.model, character.pat, character.pull])];
+    const wasmFiles = [
+      'vision_wasm_internal.js',
+      'vision_wasm_internal.wasm',
+      'vision_wasm_module_internal.js',
+      'vision_wasm_module_internal.wasm',
+      'vision_wasm_nosimd_internal.js',
+      'vision_wasm_nosimd_internal.wasm',
+    ];
+    const assetUrls = [
+      TARGET_URL,
+      HAND_MODEL_URL,
+      ...wasmFiles.map((file) => `${MEDIAPIPE_WASM_URL}/${file}`),
+      ...CHARACTERS.flatMap((character) => [character.model, character.pat, character.pull]),
+    ];
     await Promise.all(assetUrls.map((url, index) => assertAssetAvailable(url, `AR 资源 ${index + 1}`)));
 
     const fbxLoader = new FBXLoader();
@@ -412,6 +429,17 @@ export function createARSession({ container, ui }) {
     const { renderer, scene, camera } = mindar;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setClearColor(0x000000, 0);
+
+    // FBXLoader imports the character's Blender materials as light-dependent
+    // Phong materials. Without scene lights the entire model renders black,
+    // hiding the white face details in camera-based AR.
+    scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.6);
+    keyLight.position.set(-0.4, 1.2, 1.8);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xdaf8e5, 0.65);
+    fillLight.position.set(0.8, 0.5, -1);
+    scene.add(fillLight);
 
     const anchor = mindar.addAnchor(0);
     const row = new THREE.Group();
@@ -444,11 +472,15 @@ export function createARSession({ container, ui }) {
     handLandmarkerTask = startHandTracking()
       .then((task) => {
         if (stopped) task.close();
-        else handLandmarker = task;
+        else {
+          handLandmarker = task;
+          ui.handTracking?.(true);
+        }
         return task;
       })
       .catch((error) => {
         console.warn('[WebAR] Hand tracking is unavailable; image tracking remains active.', error);
+        ui.handTracking?.(false, error);
         return null;
       });
 

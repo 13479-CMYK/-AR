@@ -38,32 +38,31 @@ button { font: inherit; }
 .panel {
   position: absolute;
   z-index: 5;
-  top: max(24px, env(safe-area-inset-top));
-  left: 18px;
-  right: 18px;
-  max-width: 520px;
-  margin: auto;
-  padding: 20px;
-  border: 1px solid rgba(255,255,255,.18);
-  border-radius: 20px;
-  background: rgba(4, 14, 9, .78);
-  box-shadow: 0 20px 60px rgba(0,0,0,.3);
-  backdrop-filter: blur(16px);
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 0;
+  transform: translateX(-50%);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
-.eyebrow { margin: 0 0 8px; color: #72e59d; font-size: 11px; font-weight: 750; letter-spacing: .14em; }
-h1 { margin: 0; font-size: clamp(25px, 7vw, 34px); letter-spacing: -.04em; }
-.instruction { margin: 10px 0 16px; color: #b8cabf; font-size: 14px; line-height: 1.55; }
-.status { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 14px; font-weight: 700; }
+.eyebrow, h1, .instruction { display: none; }
+.status { display: none; }
 .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #8b9b90; box-shadow: 0 0 0 5px rgba(139,155,144,.13); }
 .status[data-state="loading"] .status-dot, .status[data-state="searching"] .status-dot { background: #ffc85a; animation: pulse 1.2s infinite; }
 .status[data-state="success"] .status-dot { background: #31df75; box-shadow: 0 0 0 5px rgba(49,223,117,.17); }
 .status[data-state="lost"] .status-dot, .status[data-state="error"] .status-dot { background: #ff755f; }
 .lost-hint { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: rgba(255,117,95,.14); color: #ffd1c9; font-size: 13px; }
-.actions { display: flex; gap: 10px; margin-top: 18px; }
-.actions button { flex: 1; min-height: 48px; border: 0; border-radius: 13px; background: #32db77; color: #05210f; font-weight: 800; cursor: pointer; }
+.actions { display: flex; gap: 8px; margin: 0; }
+.actions button { min-width: 102px; min-height: 42px; padding: 0 16px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; background: rgba(4,14,9,.72); color: #eef8f1; font-size: 14px; font-weight: 750; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,.16); backdrop-filter: blur(10px); }
+.actions button:not(.secondary) { background: rgba(49, 219, 119, .92); color: #05210f; }
 .actions button:disabled { opacity: .55; }
-.actions .secondary { border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.09); color: white; }
+.actions .secondary { background: rgba(4,14,9,.72); color: white; }
 
 .debug {
   position: absolute;
@@ -88,5 +87,5 @@ h1 { margin: 0; font-size: clamp(25px, 7vw, 34px); letter-spacing: -.04em; }
 [hidden] { display: none !important; }
 
 @keyframes pulse { 50% { opacity: .45; transform: scale(.8); } }
-@media (max-height: 620px) { .panel { padding: 15px; } .instruction { margin-block: 6px 10px; } .actions { margin-top: 12px; } }
+@media (max-height: 620px) { .panel { top: max(8px, env(safe-area-inset-top)); } .actions button { min-height: 38px; } }
 @media (prefers-reduced-motion: reduce) { .status-dot { animation: none !important; } }
